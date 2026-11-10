@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Paper Radar — MVP Roadmap (v3)</title><style>
+:root{--teal:#0F766E;--teal-l:#E6F4F2;--ink:#17212F;--mute:#5B6676;--line:#E2E8F0;--bg:#F8FAFC}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.6 Inter,system-ui,-apple-system,"Segoe UI",Roboto,"Noto Sans KR",sans-serif}
+main{max-width:980px;margin:40px auto;padding:44px 52px;background:#fff;border:1px solid var(--line);border-radius:16px;box-shadow:0 4px 24px rgba(15,23,42,.05)}
+h1{font-size:30px;margin:0 0 6px;letter-spacing:-.02em}
+h1+p{color:var(--mute);margin-top:0;padding-bottom:18px;border-bottom:1px solid var(--line)}
+h2{font-size:20px;margin:40px 0 12px;padding-left:12px;border-left:4px solid var(--teal)}
+h3{font-size:16px;margin:28px 0 8px}
+h3.stage{display:inline-block;background:var(--teal-l);color:var(--teal);padding:6px 14px;border-radius:999px}
+table{width:100%;border-collapse:collapse;margin:12px 0 18px;font-size:14px}
+th{background:var(--teal);color:#fff;text-align:left;font-weight:600;padding:9px 12px}
+th:first-child{border-top-left-radius:8px}th:last-child{border-top-right-radius:8px}
+td{padding:9px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+tr:nth-child(even) td{background:#FBFDFD}
+tr:last-child td strong{color:var(--teal)}
+code{background:#F1F5F9;padding:1px 6px;border-radius:5px;font-size:13px}
+ul{padding-left:22px}li{margin:4px 0}
+li.task{list-style:none;margin-left:-22px}li.task input{margin-right:8px;accent-color:var(--teal)}
+p strong{color:var(--ink)}
+@media print{body{background:#fff}main{box-shadow:none;border:0;margin:0;padding:0}h2{break-after:avoid}table{break-inside:avoid}}
+@media (max-width:700px){main{margin:0;padding:24px 18px;border-radius:0}table{display:block;overflow-x:auto}}
+</style></head>
+<body><main>
+<h1>Paper Radar — MVP Roadmap (v3)</h1>
+<p><em>Updated 2026-11-10 · Repo: <code>kyeongseoplim/paper-radar</code> · Current progress ≈ 35–40% of MVP · Project length: ~1 month</em></p>
+<h2>1. Final setup (all free)</h2>
+<table>
+<thead>
+<tr>
+<th>Part</th>
+<th>Service</th>
+<th>Role</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Website</td>
+<td>Streamlit Community Cloud</td>
+<td>Report, About &amp; Roadmap, Settings pages; free <code>.streamlit.app</code> address</td>
+</tr>
+<tr>
+<td>Login</td>
+<td>Auth0 (passwordless email code; Google as an optional second button)</td>
+<td>Confirms each member's email; free up to 25,000 monthly active users</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>Neon (free Postgres)</td>
+<td>Users, keywords, followed authors, reports; idles when unused and wakes on its own</td>
+</tr>
+<tr>
+<td>Weekly job</td>
+<td>GitHub Actions</td>
+<td>Runs the Python job (<code>weekly_run.py</code>) that fetches papers, computes trends, calls Gemini and saves reports</td>
+</tr>
+<tr>
+<td>Schedule + email</td>
+<td>Your existing n8n (Community Edition, web UI)</td>
+<td>Starts the weekly GitHub run, emails each user when it finishes, alerts the admin on failure</td>
+</tr>
+<tr>
+<td>Summaries</td>
+<td>Gemini API</td>
+<td>Short summaries of the week's papers and trends</td>
+</tr>
+<tr>
+<td>Paper data</td>
+<td>OpenAlex (free API key)</td>
+<td>New papers, author lookup, counts for trends</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Weekly flow:</strong> n8n schedule (e.g. Monday 07:00 KST) → GitHub Actions runs the Python job → reports saved to Neon → n8n is notified → n8n emails each user → users open the site to see the full report.</p>
+<h2>2. Decisions locked in</h2>
+<ul>
+<li><strong>One account per member.</strong> Each user has a free-text lab name; duplicates are allowed. Data is private to each user, even when two users share a lab name.</li>
+<li><strong>Login by email one-time code</strong> through Auth0, connected to Streamlit's built-in login.</li>
+<li><strong>Notifications by email + site.</strong> No Telegram.</li>
+<li><strong>No approval step.</strong> Emails are sent automatically once testing is finished. Until then, a test mode sends every email to the admin only.</li>
+<li><strong>Gemini for summaries.</strong> Use the paid tier before real users join (the free tier may use prompts to improve Google's products).</li>
+<li><strong>Followed person is confirmed by the user</strong> at sign-up (the exact OpenAlex profile), not picked automatically.</li>
+</ul>
+<h2>3. Data to store</h2>
+<ul>
+<li><strong>Users:</strong> email, name, lab name, email on/off.</li>
+<li><strong>Keywords:</strong> 2–3 per user.</li>
+<li><strong>Followed author:</strong> OpenAlex ID, display name, institution.</li>
+<li><strong>Reports:</strong> one per user per week (data, Markdown and email version, when it was emailed).</li>
+<li><strong>Seen papers:</strong> so the same paper isn't reported twice.</li>
+<li><strong>Run log:</strong> when each weekly run started and finished, successes and failures.</li>
+</ul>
+<p>Every page and query only reads the logged-in user's own rows. Public OpenAlex results can be cached and shared between users with the same keywords.</p>
+<h2>4. Roadmap by stage</h2>
+<h3 class="stage">Stage 1 — Minimal working core (≈ 5 days)</h3>
+<p><strong>Goal:</strong> a member logs in, registers keywords and a person, and sees this week's saved report.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>What it covers</th>
+<th>Est.</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Database + data model</td>
+<td>Create the Neon project and the tables above; small database helper module in the repo</td>
+<td>1 day</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Login + onboarding</td>
+<td>Auth0 passwordless email setup, connect it to Streamlit login; first-login form (name, lab name, keywords, person with author confirmation)</td>
+<td>1.5 days</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Weekly Python job</td>
+<td>For each user: papers from the last 7 days (widened if too few), skip already-seen papers, compute counts, save the report. Can be run by hand for testing</td>
+<td>1.5 days</td>
+</tr>
+<tr>
+<td>8</td>
+<td>Report page</td>
+<td>Show the user's latest saved report using the existing cards and charts, plus a picker for past weeks; no live OpenAlex calls on page load</td>
+<td>1 day</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Done when:</strong> two test accounts with different keywords each see only their own report, made by a manual run of the job.</p>
+<h3 class="stage">Stage 2 — Core automation (≈ 2–2.5 days)</h3>
+<p><strong>Goal:</strong> the weekly cycle runs and emails users without anyone touching it.</p>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>What it covers</th>
+<th>Est.</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>9</td>
+<td>Deploy</td>
+<td>Streamlit Community Cloud app connected to Neon and Auth0 (secrets set in each service); GitHub Actions workflow for the Python job with its secrets</td>
+<td>0.5–1 day</td>
+</tr>
+<tr>
+<td>10</td>
+<td>n8n workflow</td>
+<td>Schedule → start the GitHub run → wait for its "done" signal → read unsent reports from Neon → send one email per user → mark as sent → alert the admin on any failure. Includes test mode (admin-only emails)</td>
+<td>1–1.5 days</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Done when:</strong> two scheduled runs in a row finish without errors, and test users receive the email automatically. Then turn test mode off.</p>
+<h3 class="stage">Stage 3 — Remaining features (≈ 3–3.5 days)</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>What it covers</th>
+<th>Est.</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>3</td>
+<td>Multi-page layout + About &amp; Roadmap</td>
+<td>Report · About &amp; Roadmap (static, same for everyone) · Settings</td>
+<td>0.5 day</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Settings page</td>
+<td>Edit keywords, person (with author confirmation), lab name, email on/off; changes apply from the next weekly run</td>
+<td>0.5–1 day</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Weekly keyword trends</td>
+<td>Papers this week vs. the 4-week average for each keyword, plus new topics this week; keep the existing yearly charts as background</td>
+<td>1 day</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Gemini summary</td>
+<td>One summary per user per week, added to both the report page and the email; if Gemini fails, the report is sent without it</td>
+<td>1 day</td>
+</tr>
+</tbody>
+</table>
+<h3 class="stage">Stage 4 — Clean-up + pilot (≈ 0.5 day + pilot)</h3>
+<table>
+<thead>
+<tr>
+<th>#</th>
+<th>Step</th>
+<th>What it covers</th>
+<th>Est.</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>11</td>
+<td>Clean-up + tests</td>
+<td>Tests for the search and report logic; keep the demo saved results separate from real data; check the run log</td>
+<td>0.5 day</td>
+</tr>
+<tr>
+<td>12</td>
+<td>Pilot</td>
+<td>1–2 real labs (several members each) for 2–3 weekly cycles; tune synonyms, relevance and the summary prompt</td>
+<td>2–3 days of work over ~2 weeks</td>
+</tr>
+</tbody>
+</table>
+<h2>5. Time summary</h2>
+<table>
+<thead>
+<tr>
+<th>Stage</th>
+<th>Scope</th>
+<th>Est. (full-time days)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>Minimal working core (1, 2, 5, 8)</td>
+<td>~5</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Core automation (9, 10)</td>
+<td>~2–2.5</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Remaining features (3, 4, 6, 7)</td>
+<td>~3–3.5</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Clean-up + pilot (11, 12)</td>
+<td>~0.5 + pilot</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td></td>
+<td><strong>~10.5–11.5 days + 2-week pilot</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Within a one-month project, plan Stages 1–2 in week 1–2, Stage 3 in week 3, and run the pilot alongside Stage 3–4.</p>
+<h2>6. Accounts to set up before starting</h2>
+<ul>
+<li class="task"><input type="checkbox"> OpenAlex API key (already in use)</li>
+<li class="task"><input type="checkbox"> Neon account + project</li>
+<li class="task"><input type="checkbox"> Auth0 account: web application + passwordless email connection</li>
+<li class="task"><input type="checkbox"> (Optional) Google login for Auth0</li>
+<li class="task"><input type="checkbox"> Gemini API key (Google AI Studio)</li>
+<li class="task"><input type="checkbox"> GitHub: repo secrets for the job + a token so n8n can start the run</li>
+<li class="task"><input type="checkbox"> Email sender for n8n (Gmail app password or a sending service)</li>
+<li class="task"><input type="checkbox"> Streamlit Community Cloud app linked to the repo</li>
+</ul>
+<h2>7. Free-tier limits to keep in mind</h2>
+<table>
+<thead>
+<tr>
+<th>Service</th>
+<th>Limit</th>
+<th>Effect on this project</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Streamlit Community Cloud</td>
+<td>Sleeps after 12 hours without visitors; ~1 GB memory; no custom domain</td>
+<td>First visit after a quiet period takes a moment to load</td>
+</tr>
+<tr>
+<td>Neon</td>
+<td>Small storage and monthly compute allowance; idles after 5 minutes</td>
+<td>Far more than needed; first request after idle is slightly slower</td>
+</tr>
+<tr>
+<td>Auth0</td>
+<td>25,000 monthly active users</td>
+<td>No concern</td>
+</tr>
+<tr>
+<td>GitHub Actions</td>
+<td>Scheduled workflows in inactive repos can be turned off after 60 days</td>
+<td>Not an issue: n8n starts the run, and the repo is active during the project</td>
+</tr>
+<tr>
+<td>Gemini free tier</td>
+<td>Rate limits; prompts may be used by Google</td>
+<td>Fine for testing; switch to paid before real users</td>
+</tr>
+<tr>
+<td>OpenAlex</td>
+<td>$1/day free usage with a key</td>
+<td>One weekly batch + shared cache stays well within it</td>
+</tr>
+<tr>
+<td>n8n</td>
+<td>Runs only while your n8n deployment is up</td>
+<td>Check it is online at the scheduled time</td>
+</tr>
+</tbody>
+</table>
+<h2>8. Risks to watch</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Wrong author (people with the same name)</td>
+<td>User confirms the exact profile at sign-up and in Settings</td>
+</tr>
+<tr>
+<td>Emails landing in spam</td>
+<td>Use a proper sender address; check spam folders during the pilot</td>
+</tr>
+<tr>
+<td>Gemini outage or model name changes</td>
+<td>Model name kept in config; send the report without a summary if it fails</td>
+</tr>
+<tr>
+<td>Automatic sending mistakes</td>
+<td>Test mode, manual test runs, and an admin alert after every run</td>
+</tr>
+<tr>
+<td>A service changes its free plan</td>
+<td>All parts are standard (Postgres, OIDC login, SMTP), so each can be swapped without a rewrite</td>
+</tr>
+</tbody>
+</table>
+</main></body></html>
