@@ -11,82 +11,82 @@ Data: [OpenAlex](https://openalex.org) (CC0). Course project demo, Kyung Hee Uni
 
 ---
 
-## 실행 (로컬)
+## Running locally
 
-이 폴더(`paper_radar`)에서 실행해야 테마(`.streamlit/config.toml`)와 API 키(`secrets.toml`)가 적용됩니다.
+Run the app from this folder (`paper_radar`) so that the theme (`.streamlit/config.toml`) and the API key (`secrets.toml`) are applied.
 
 ```bash
 .venv/Scripts/python -m streamlit run app.py
 ```
 
-처음 설치할 때:
+First-time setup:
 
 ```bash
 py -3.14 -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
 ```
 
-## 배포 (Streamlit Community Cloud → 실제 URL)
+## Deploying (Streamlit Community Cloud → a real URL)
 
-1. GitHub에 새 저장소를 만듭니다 (예: `paper-radar`). 공개 저장소면 앱도 공개, 비공개면 비공개 앱(1개 제한)이 됩니다.
-2. 이 폴더를 올립니다. `.gitignore`가 `.venv/`, `cache/`, `secrets.toml`을 빼 줍니다. **`seed_cache/`는 꼭 함께 올립니다.**
+1. Create a new GitHub repository (e.g. `paper-radar`). A public repository gives a public app; a private one gives a private app (limit of 1).
+2. Push this folder. `.gitignore` excludes `.venv/`, `cache/` and `secrets.toml`. **Make sure `seed_cache/` is pushed too.**
    ```bash
    git init -b main
    git add .
    git commit -m "Paper Radar demo"
-   git remote add origin https://github.com/<아이디>/paper-radar.git
+   git remote add origin https://github.com/<your-username>/paper-radar.git
    git push -u origin main
    ```
-3. https://share.streamlit.io → **Create app** → 저장소 `paper-radar`, 브랜치 `main`, 파일 `app.py`.
-4. **App URL**에 원하는 이름 (예: `paper-radar-khu` → `https://paper-radar-khu.streamlit.app`).
-5. **Advanced settings** → Python **3.12** 선택, **Secrets**에 아래를 붙여 넣기 → Deploy.
+3. Go to https://share.streamlit.io → **Create app** → repository `paper-radar`, branch `main`, file `app.py`.
+4. Under **App URL**, pick a name (e.g. `paper-radar-khu` → `https://paper-radar-khu.streamlit.app`).
+5. Open **Advanced settings** → choose Python **3.12**, paste the following into **Secrets** → Deploy.
    ```toml
-   OPENALEX_API_KEY = "발급받은_키"
+   OPENALEX_API_KEY = "your_api_key"
    ```
 
-### 클라우드 주의
+### Cloud caveats
 
-- **API 키 필수.** 키가 없으면 OpenAlex 공유 한도(하루 $0.10)로 조회하는데, 클라우드 서버는 여러 앱이 IP를 나눠 쓸 가능성이 높아 금방 막힙니다. 무료 키: https://openalex.org/settings/api
-- **12시간 동안 방문이 없으면 앱이 잠듭니다.** 발표 10분 전에 주소를 열어 깨워 두세요.
-- 실행 중에 받은 결과(`cache/`)는 재시작하면 사라질 수 있습니다. 발표용 결과는 `seed_cache/`에 넣어 git으로 올립니다(아래).
+- **An API key is required.** Without one, requests use OpenAlex's shared quota ($0.10 per day). Cloud servers are likely to share IPs across many apps, so you will get blocked quickly. Free key: https://openalex.org/settings/api
+- **The app goes to sleep after 12 hours without visits.** Open the URL 10 minutes before your presentation to wake it up.
+- Results fetched while running (`cache/`) may be lost on restart. Put presentation results in `seed_cache/` and push them with git (see below).
 
-## 발표 전 준비
+## Before a presentation
 
-1. **미리 받기** → `seed_cache/`에 저장 → git에 커밋·푸시
+1. **Prefetch** → saved to `seed_cache/` → commit and push to git
    ```bash
    .venv/Scripts/python prefetch.py
    ```
-   다른 검색도 미리 받을 수 있습니다: `prefetch.py "network slicing, xApp" "Michele Polese"`
-2. 주소로 바로 결과 열기 (링크 공유용):
-   `https://<앱주소>/?kw=MAC+scheduler%2C+O-RAN&people=Tommaso+Melodia`
-3. 네트워크가 불안하면 주소 끝에 `&offline=1` → 저장본만 사용.
+   You can prefetch other searches too: `prefetch.py "network slicing, xApp" "Michele Polese"`
+2. Open results directly from a URL (for sharing links):
+   `https://<app-url>/?kw=MAC+scheduler%2C+O-RAN&people=Tommaso+Melodia`
+3. If the network is unreliable, add `&offline=1` to the end of the URL → only saved results are used.
 
-화면 아래 표시로 데이터 출처를 알 수 있습니다: 🟢 Live · 🔵 Saved result · 🟠 OpenAlex busy (저장본 사용).
+The indicator at the bottom of the page shows where the data came from: 🟢 Live · 🔵 Saved result · 🟠 OpenAlex busy (using saved result).
 
-## 검색 규칙
+## Search rules
 
-| 입력 | 규칙 |
+| Input | Rule |
 |---|---|
-| Keywords | 쉼표로 구분, **쉼표 하나 = 반드시 포함할 주제 하나 (AND)**. 같은 뜻 표현은 자동 확장 (O-RAN = Open RAN = open radio access network, scheduler = scheduling 등, `core/query.py`의 `SYNONYMS`) |
-| 기간 | 최근 30일 → 3편 미만이면 90일 → 365일로 자동 확장하고 화면에 알림 |
-| Key people | 쉼표로 구분 (최대 3명). 논문 수가 가장 많은 동명 저자를 자동 선택, "Not the right person?"에서 변경 |
-| 트렌드 | 키워드 중 **하나라도** 포함한 논문(OR)으로 넓게 집계. 검색어 자체는 워드클라우드에서 제외 |
+| Keywords | Comma-separated. **Each comma-separated term is a required topic (AND).** Equivalent expressions expand automatically (O-RAN = Open RAN = open radio access network, scheduler = scheduling, etc.; see `SYNONYMS` in `core/query.py`) |
+| Time window | Last 30 days → if fewer than 3 papers, widens automatically to 90 days → 365 days, with a notice on screen |
+| Key people | Comma-separated (up to 3 people). Among authors with the same name, the one with the most papers is picked automatically; change it under "Not the right person?" |
+| Trends | Counted broadly over papers containing **any** of the keywords (OR). The search terms themselves are excluded from the word clouds |
 
-## 파일
+## Files
 
 ```
-app.py              화면 전환 (URL ?kw=&people= 이 있으면 결과, 없으면 검색)
-core/openalex.py    OpenAlex 조회, 요청 간격·재시도, 저장본(cache/, seed_cache/), 중복 제거
-core/query.py       입력 해석, 동의어, 기간 자동 확장, 인물 매칭, 트렌드 집계
-ui/style.py         디자인 (CSS, 상단 바, 히어로, 카드, 워드클라우드)
-ui/search.py        검색 화면
-ui/results.py       결과 화면 (01 New papers · 02 Key people · 03 Trends · 04 Summaries)
-prefetch.py         발표·배포 전 미리 받기 → seed_cache/
-.streamlit/config.toml   테마 (Agent1000 스타일 색·모서리·Inter 글꼴)
+app.py              Screen switching (results if the URL has ?kw=&people=, otherwise search)
+core/openalex.py    OpenAlex queries, request spacing and retries, saved results (cache/, seed_cache/), deduplication
+core/query.py       Input parsing, synonyms, automatic window widening, people matching, trend aggregation
+ui/style.py         Design (CSS, top bar, hero, cards, word clouds)
+ui/search.py        Search screen
+ui/results.py       Results screen (01 New papers · 02 Key people · 03 Trends · 04 Summaries)
+prefetch.py         Prefetch before a presentation or deployment → seed_cache/
+.streamlit/config.toml   Theme (Agent1000-style colors, corner radius, Inter font)
 ```
 
-## 알려진 한계
+## Known limitations
 
-- OpenAlex는 일부 출판사 논문의 초록이 비어 있어, 초록에만 나오는 표현은 놓칠 수 있습니다.
-- 급상승 키워드는 연도별 상위 키워드 기준이라, 초기 연도에 순위 밖이던 단어는 증가 폭이 크게 보일 수 있습니다.
-- 동명이인 자동 선택은 "논문 수 최다" 기준이라 틀릴 수 있습니다 → 화면에서 바꾸세요.
+- OpenAlex has empty abstracts for some publishers' papers, so terms that appear only in the abstract may be missed.
+- Rising keywords are based on each year's top keywords, so words that were outside the top ranks in early years can show an exaggerated increase.
+- Automatic selection among authors with the same name uses "most papers" and may be wrong → change it on screen.
