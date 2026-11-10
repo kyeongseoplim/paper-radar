@@ -11,7 +11,7 @@ import streamlit as st
 
 from core import openalex as oa
 from core import query
-from ui import results, search, style
+from ui import results, roadmap, search, style
 
 st.set_page_config(page_title="Paper Radar · new papers and trends for your lab", page_icon="📡",
                    layout="wide", initial_sidebar_state="collapsed")
@@ -32,6 +32,8 @@ qp = st.query_params
 kw, people = qp.get("kw", ""), qp.get("people", "")
 offline = qp.get("offline") == "1"
 view = "results" if (kw.strip() or people.strip()) else "search"
+if qp.get("page") == "roadmap":
+    view = "roadmap"
 
 
 def go(new_kw: str, new_people: str) -> None:
@@ -50,7 +52,9 @@ if style.nav(view):
         st.query_params.from_dict({"offline": "1"} if offline else {})
         st.rerun()
 
-if view == "search":
+if view == "roadmap":
+    roadmap.render()
+elif view == "search":
     submitted = search.render(*ss.get("prefill", ("", "")))
     if submitted:
         go(*submitted)
