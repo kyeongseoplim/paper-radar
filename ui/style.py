@@ -174,7 +174,8 @@ def nav(view: str) -> bool:
         st.html('<div class="pr-logo"><a href="./" target="_self">PAPER<span>RADAR</span></a></div>', width="content")
         st.html(f'<div class="pr-links"><a href="#how-it-works" target="_self">How it works</a>'
                 f'<a href="{example_href()}" target="_self">Sample radar</a>'
-                f'<a href="?page=roadmap" target="_self">Roadmap</a></div>', width="content")
+                f'<a href="?page=roadmap" target="_self">Roadmap</a>'
+                f'<a href="?page=me" target="_self">My radar</a></div>', width="content")
         if view == "search":
             return st.button("Try an example", icon=":material/arrow_forward:", icon_position="right",
                              type="primary", key="nav_example")
