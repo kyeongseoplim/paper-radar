@@ -10,7 +10,7 @@ import os
 import streamlit as st
 
 from core import openalex as oa
-from core import query
+from core import auth, query
 from ui import account, report, results, roadmap, search, style
 
 st.set_page_config(page_title="Paper Radar · new papers and trends for your lab", page_icon="📡",
@@ -36,6 +36,9 @@ if qp.get("page") == "roadmap":
     view = "roadmap"
 elif qp.get("page") == "me":
     view = "me"
+if view == "search" and auth.take_fresh_login():  # 로그인 직후엔 첫 화면으로 오므로 My radar로 보낸다
+    st.query_params.from_dict({"page": "me"})
+    st.rerun()
 
 
 def go(new_kw: str, new_people: str) -> None:
@@ -46,7 +49,7 @@ def go(new_kw: str, new_people: str) -> None:
     st.rerun()
 
 
-if style.nav(view):
+if style.nav(view, auth.current_email()):
     if view == "search":
         go(query.EXAMPLE["kw"], query.EXAMPLE["people"])
     else:
