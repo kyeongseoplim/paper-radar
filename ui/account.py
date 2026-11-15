@@ -1,0 +1,162 @@
+"""로그인 화면과 첫 로그인 폼(이름, 연구실, 키워드, 팔로우할 사람 확인).
+
+밖에서는 gate() 한 함수만 쓴다. session_state·위젯 key 접두어: auth_, onb_
+"""
+from __future__ import annotations
+
+import html
+
+import streamlit as st
+
+from core import auth, query
+from core import openalex as oa
+from core.store import db
+from ui import style
+
+SKIP = "skip"
+
+
+def gate(client: oa.OpenAlex) -> dict:
+    """로그인과 첫 로그인 폼을 통과한 user를 돌려준다. 통과 전에는 해당 화면을 그리고 멈춘다."""
+    if not auth.available():
+        _message("Login is coming soon.", "Weekly reports for your lab are on the way. "
+                 "Until then, search works without an account.")
+        _stop()
+    email = auth.current_email()
+    if email is None:
+        _login_screen()
+        _stop()
+    try:
+        user = db.get_user(email)
+    except NotImplementedError:
+        _message("Almost there.", "You are signed in, but the database is not connected yet.")
+        _stop()
+    if user is None:
+        _onboarding(client, email)
+        _stop()
+    _account_bar(user)
+    return user
+
+
+def _stop() -> None:
+    style.footer()
+    st.stop()
+
+
+def _message(title: str, text: str) -> None:
+    st.html(f'<div class="pr-soon"><b>{html.escape(title)}</b>'
+            f'<p class="pr-note">{html.escape(text)}</p></div>')
+
+
+def _login_screen() -> None:
+    st.html(style.eyebrow("MY RADAR", dot=True)
+            + '<div class="pr-h1">Log in to see your weekly radar.</div>'
+            + '<p class="pr-sub">Enter your email and we send you a one-time code. No password to remember.</p>')
+    st.button("Log in with email", type="primary", icon=":material/mail:", key="auth_login", on_click=auth.login)
+
+
+def _account_bar(user: dict) -> None:
+    left, right = st.columns([5, 1], vertical_alignment="center")
+    with left:
+        note = "" if auth.configured() else " · dev user (no real login)"
+        st.html(f'<div class="pr-note">Signed in as <b>{html.escape(user["email"])}</b>{note}</div>')
+    with right:
+        if auth.configured():
+            st.button("Log out", key="auth_logout", on_click=auth.logout, width="stretch")
+
+
+# ---------- 첫 로그인 폼 ----------
+
+def _onboarding(client: oa.OpenAlex, email: str) -> None:
+    st.html(style.eyebrow("WELCOME", dot=True)
+            + '<div class="pr-h1">Set up your radar.</div>'
+            + f'<p class="pr-sub">Signed in as {html.escape(email)}. This takes about a minute.</p>')
+    draft = st.session_state.get("onb_draft")
+    if draft is None:
+        _step_profile()
+    else:
+        _step_person(client, email, draft)
+
+
+def _step_profile() -> None:
+    """1단계: 이름, 연구실, 키워드, 팔로우할 사람 이름."""
+    prev = st.session_state.get("onb_prev", {})
+    with st.form("onb_form", enter_to_submit=False):
+        name = st.text_input("Your name", value=prev.get("name", ""), max_chars=80)
+        lab = st.text_input("Lab name", value=prev.get("lab", ""), max_chars=120,
+                            placeholder="e.g. Mobile Communications Lab")
+        kw = st.text_input("Keywords", value=", ".join(prev.get("keywords", [])),
+                           placeholder="e.g. MAC scheduler, O-RAN",
+                           help=f"Up to {query.MAX_KEYWORDS}, separated by commas.")
+        person = st.text_input("A researcher to follow (optional)", value=prev.get("person", ""),
+                               placeholder="e.g. Tommaso Melodia")
+        submitted = st.form_submit_button("Next", type="primary", icon=":material/arrow_forward:",
+                                          icon_position="right")
+    if not submitted:
+        return
+    keywords = query.parse_list(kw, query.MAX_KEYWORDS)
+    people = query.parse_list(person, 1)
+    problems = []
+    if not name.strip():
+        problems.append("Enter your name.")
+    if not lab.strip():
+        problems.append("Enter your lab name.")
+    if not keywords:
+        problems.append("Add at least one keyword.")
+    if problems:
+        for p in problems:
+            st.error(p, icon=":material/info:")
+        return
+    st.session_state.onb_draft = {"name": name.strip(), "lab": lab.strip(), "keywords": keywords,
+                                  "person": people[0] if people else ""}
+    st.rerun()
+
+
+def _step_person(client: oa.OpenAlex, email: str, draft: dict) -> None:
+    """2단계: 같은 이름의 저자 후보 중 맞는 사람을 고르고 저장."""
+    author = None
+    if draft["person"]:
+        author = _pick_author(client, draft["person"])
+    st.html('<div class="pr-note" style="margin-top:14px">'
+            f'<b>{html.escape(draft["name"])}</b> · {html.escape(draft["lab"])} · '
+            f'Keywords: {html.escape(", ".join(draft["keywords"]))}</div>')
+    back, save, _ = st.columns([1, 2, 5])
+    with back:
+        if st.button("Back", key="onb_back", width="stretch"):
+            st.session_state.onb_prev = st.session_state.pop("onb_draft")
+            st.rerun()
+    with save:
+        if st.button("Save and continue", type="primary", key="onb_save", width="stretch"):
+            db.save_profile(email, draft["name"], draft["lab"], draft["keywords"], author)
+            st.session_state.pop("onb_draft", None)
+            st.session_state.pop("onb_prev", None)
+            st.rerun()
+
+
+def _pick_author(client: oa.OpenAlex, name: str) -> dict | None:
+    try:
+        match = query.match_person(client, name)
+    except oa.FetchError as e:
+        st.warning(f"Could not look up authors right now ({e}). You can save now and add a person later.")
+        return None
+    cands = match["candidates"]
+    if not cands:
+        st.info(f'No author found for "{name}". You can save now and add a person later.')
+        return None
+    by_id = {c["id"]: c for c in cands}
+    options = list(by_id) + [SKIP]
+
+    def label(option: str) -> str:
+        if option == SKIP:
+            return "None of these (skip for now)"
+        c = by_id[option]
+        return f'{c["name"]} · {c["inst"]} · {c["works"]:,} papers'
+
+    st.html(f'<div class="pr-h2">Which {html.escape(name)} do you mean?</div>'
+            '<p class="pr-sub">Several authors can share a name. Pick the one you want to follow.</p>')
+    pick = st.radio("Author", options, index=options.index(match["chosen"]["id"]), format_func=label,
+                    key="onb_pick", label_visibility="collapsed")
+    if pick == SKIP:
+        return None
+    c = by_id[pick]
+    return {"id": c["id"], "name": c["name"], "inst": c["inst"]}
