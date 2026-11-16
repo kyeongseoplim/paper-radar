@@ -26,6 +26,22 @@ py -3.14 -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
 ```
 
+## Database (Neon Postgres)
+
+User accounts, keywords, followed authors, weekly reports and the run log live in a free [Neon](https://neon.tech) Postgres database.
+
+1. Create a Neon project (region near your users, e.g. AWS Asia Pacific Tokyo). Optionally create a `dev` branch for testing.
+2. In **Connect**, copy the **pooled** connection string (host contains `-pooler`) into `.streamlit/secrets.toml` as `DATABASE_URL` (see `secrets.toml.example`). Scripts and the weekly job can use a `DATABASE_URL` environment variable instead.
+3. Create the tables (safe to re-run after `db/schema.sql` changes):
+   ```bash
+   .venv/Scripts/python scripts/init_db.py
+   ```
+   To use Neon's direct (non-pooled) string for schema changes, set `DATABASE_URL_DIRECT`.
+4. Check everything works (creates two throwaway users, checks they can't see each other's data, then deletes them):
+   ```bash
+   .venv/Scripts/python scripts/smoke_db.py
+   ```
+
 ## Deploying (Streamlit Community Cloud → a real URL)
 
 1. Create a new GitHub repository (e.g. `paper-radar`). A public repository gives a public app; a private one gives a private app (limit of 1).
@@ -81,6 +97,10 @@ core/query.py       Input parsing, synonyms, automatic window widening, people m
 ui/style.py         Design (CSS, top bar, hero, cards, word clouds)
 ui/search.py        Search screen
 ui/results.py       Results screen (01 New papers · 02 Key people · 03 Trends · 04 Summaries)
+core/db.py          Database helpers (users, keywords, author, reports, seen papers, run log, shared cache)
+db/schema.sql       Table definitions for Neon Postgres
+scripts/init_db.py  Create/update the tables · scripts/smoke_db.py  End-to-end database check
+ui/dbstatus.py      Database status page (?page=db)
 prefetch.py         Prefetch before a presentation or deployment → seed_cache/
 .streamlit/config.toml   Theme (Agent1000-style colors, corner radius, Inter font)
 ```
