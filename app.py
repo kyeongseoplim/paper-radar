@@ -9,9 +9,12 @@ import os
 
 import streamlit as st
 
+from core import auth as login
+from core import db
 from core import openalex as oa
 from core import query
-from ui import account, auth, dbstatus, report, results, roadmap, search, style
+from core.store import flag
+from ui import account, auth, dbstatus, onboarding, report, results, roadmap, search, style
 
 st.set_page_config(page_title="Paper Radar · new papers and trends for your lab", page_icon="📡",
                    layout="wide", initial_sidebar_state="collapsed")
@@ -36,10 +39,13 @@ if qp.get("page") in ("roadmap", "db", "me", "settings"):
     view = qp.get("page")             # me = weekly report, settings = profile form
 
 user = auth.current_user()
-if user and user["onboarded_at"] is None and view != "roadmap":
-    view = "settings"                     # first login: finish the profile before anything else
-elif view in ("me", "settings") and not user:
-    view = "search"
+if view == "search" and login.take_fresh_login():  # Streamlit always returns to "/" after login → go to My radar
+    st.query_params.from_dict({"page": "me"})
+    st.rerun()
+if user and user["onboarded_at"] is None and view not in ("roadmap", "me"):
+    view = "me"                           # first login: finish the first-login form (?page=me) before anything else
+elif view == "settings" and not user:
+    view = "me"                           # not logged in: My radar shows the login screen
 if view == "db" and auth.configured() and not auth.is_admin(user):
     view = "search"                       # status page: admins only once login is set up
 
@@ -67,7 +73,12 @@ elif view == "db":
 elif view == "settings":
     account.profile_form(oa.OpenAlex(api_key=api_key(), offline=offline), user)
 elif view == "me":
-    report.render(user)
+    me = onboarding.gate(oa.OpenAlex(api_key=api_key(), offline=offline))  # login screen + first-login form
+    if flag("PR_DB") == "fake":           # file DB for development: there is no report data to show
+        st.info("Signed in with the file DB (PR_DB=fake). Weekly reports need the real database.",
+                icon=":material/info:")
+    else:
+        report.render(db.get_user(me["id"]))  # always the fresh users row (name, lab, email setting)
 elif view == "search":
     submitted = search.render(*ss.get("prefill", ("", "")))
     if submitted:

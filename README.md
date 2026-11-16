@@ -54,7 +54,9 @@ Members sign in with a one-time code sent to their email (Auth0 passwordless), t
 4. Back in the application's **Connections** tab: turn off *Username-Password-Authentication*; leave *email* on (and *google-oauth2* if you want a Google button).
 5. Copy **Domain**, **Client ID** and **Client Secret** into the `[auth]` section of `.streamlit/secrets.toml` (see `secrets.toml.example`). Generate `cookie_secret` with `python -c "import secrets; print(secrets.token_hex(32))"`.
 6. Put your own email in `ADMIN_EMAILS` to keep access to the `?page=db` status page.
-7. Restart Streamlit, click **Sign in**, enter your email, type the code. On the first login you fill in name, lab, 2–3 keywords and (optionally) the person to follow, then land on **My radar** (`?page=me`).
+7. Restart Streamlit, click **Sign in**, enter your email, type the code. You land on **My radar** (`?page=me`); on the first login it shows the first-login form (name, lab, 2–3 keywords, optionally a person to follow, picked from the matching OpenAlex authors). Change these later under **Settings** (`?page=settings`).
+
+For development without Auth0: leave out `[auth]` and set `PR_DEV_USER = "you@example.com"` to be signed in as that email. Add `PR_DB = "fake"` to keep first-login profiles in `cache/fake_db.json` instead of Neon (the report page needs the real database).
 
 Auth0's built-in email sender is for testing only (low sending limit). Before the pilot, set up your own SMTP under **Branding → Email Provider**.
 
@@ -150,8 +152,11 @@ ui/results.py       Results screen (01 New papers · 02 Key people · 03 Trends 
 core/db.py          Database helpers (users, keywords, author, reports, seen papers, run log, shared cache)
 db/schema.sql       Table definitions for Neon Postgres
 scripts/init_db.py  Create/update the tables · scripts/smoke_db.py  End-to-end database check
-ui/auth.py          Login (st.login + Auth0) ↔ users table, admin check
-ui/account.py       Settings page / first-login profile form (?page=settings)
+ui/auth.py          Logged-in user's row in the users table, admin check
+core/auth.py        Login state (st.login + Auth0, or PR_DEV_USER in development), send to My radar after login
+ui/onboarding.py    My radar front: login screen and first-login form (?page=me)
+core/db_app.py      Connects the first-login form to core/db.py (core/db_fake.py: same functions on a file, PR_DB=fake; core/store.py picks one)
+ui/account.py       Settings page: edit profile, keywords, author, email on/off (?page=settings)
 ui/report.py        Weekly report page with past-week picker (?page=me)
 n8n/                Weekly workflow: Code-node JS (src/), SQL (sql/), builder, importable JSON, local runner
 tests/              pytest (search logic, report page) + node tests for the n8n Code nodes
