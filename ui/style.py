@@ -36,7 +36,6 @@ a{color:var(--teal);}
 .pr-links{display:flex;gap:28px;justify-content:center;white-space:nowrap;}
 .pr-links a{color:var(--ink2) !important;text-decoration:none !important;font-weight:500;font-size:15px;}
 .pr-links a:hover{color:var(--teal) !important;}
-.pr-links a.on{color:var(--teal) !important;font-weight:650;}
 
 /* hero */
 .pr-hero{position:relative;overflow:hidden;border-radius:18px;min-height:280px;padding:44px 48px;
@@ -169,19 +168,26 @@ def example_href() -> str:
     return "?" + urlencode(query.EXAMPLE)
 
 
-def nav(view: str, signed_in: str | None = None) -> bool:
-    """상단 바. 오른쪽 버튼이 눌리면 True. signed_in(로그인한 email)이 있으면 My radar를 강조한다."""
-    me = (f'<a class="on" href="?page=me" target="_self" title="Signed in as {html.escape(signed_in)}">● My radar</a>'
-          if signed_in else '<a href="?page=me" target="_self">My radar</a>')
+def nav(view: str, user: dict | None = None, can_login: bool = False) -> bool:
+    """상단 바. 오른쪽 버튼이 눌리면 True. 로그인 설정이 있으면 Sign in / Sign out 버튼도 표시."""
     with st.container(key="nav", horizontal=True, vertical_alignment="center", horizontal_alignment="distribute"):
         st.html('<div class="pr-logo"><a href="./" target="_self">PAPER<span>RADAR</span></a></div>', width="content")
-        st.html(f'<div class="pr-links"><a href="#how-it-works" target="_self">How it works</a>'
+        mine = ('<a href="?page=me" target="_self">Report</a><a href="?page=settings" target="_self">Settings</a>'
+                if user else "")
+        st.html(f'<div class="pr-links">{mine}<a href="#how-it-works" target="_self">How it works</a>'
                 f'<a href="{example_href()}" target="_self">Sample radar</a>'
-                f'<a href="?page=roadmap" target="_self">Roadmap</a>{me}</div>', width="content")
-        if view == "search":
-            return st.button("Try an example", icon=":material/arrow_forward:", icon_position="right",
-                             type="primary", key="nav_example")
-        return st.button("New search", icon=":material/arrow_back:", key="nav_new")
+                f'<a href="?page=roadmap" target="_self">Roadmap</a></div>', width="content")
+        with st.container(horizontal=True, width="content", vertical_alignment="center"):
+            if user:
+                if st.button("Sign out", type="tertiary", key="nav_logout"):
+                    st.logout()
+            elif can_login:
+                if st.button("Sign in", icon=":material/login:", key="nav_login"):
+                    st.login()
+            if view == "search":
+                return st.button("Try an example", icon=":material/arrow_forward:", icon_position="right",
+                                 type="primary", key="nav_example")
+            return st.button("New search", icon=":material/arrow_back:", key="nav_new")
 
 
 def hero() -> None:

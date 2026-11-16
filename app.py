@@ -9,9 +9,12 @@ import os
 
 import streamlit as st
 
+from core import auth as login
+from core import db
 from core import openalex as oa
-from core import auth, query
-from ui import account, report, results, roadmap, search, style
+from core import query
+from core.store import flag
+from ui import account, auth, dbstatus, onboarding, report, results, roadmap, search, style
 
 st.set_page_config(page_title="Paper Radar · new papers and trends for your lab", page_icon="📡",
                    layout="wide", initial_sidebar_state="collapsed")
@@ -32,13 +35,19 @@ qp = st.query_params
 kw, people = qp.get("kw", ""), qp.get("people", "")
 offline = qp.get("offline") == "1"
 view = "results" if (kw.strip() or people.strip()) else "search"
-if qp.get("page") == "roadmap":
-    view = "roadmap"
-elif qp.get("page") == "me":
-    view = "me"
-if view == "search" and auth.take_fresh_login():  # 로그인 직후엔 첫 화면으로 오므로 My radar로 보낸다
+if qp.get("page") in ("roadmap", "db", "me", "settings"):
+    view = qp.get("page")             # me = weekly report, settings = profile form
+
+user = auth.current_user()
+if view == "search" and login.take_fresh_login():  # Streamlit always returns to "/" after login → go to My radar
     st.query_params.from_dict({"page": "me"})
     st.rerun()
+if user and user["onboarded_at"] is None and view not in ("roadmap", "me"):
+    view = "me"                           # first login: finish the first-login form (?page=me) before anything else
+elif view == "settings" and not user:
+    view = "me"                           # not logged in: My radar shows the login screen
+if view == "db" and auth.configured() and not auth.is_admin(user):
+    view = "search"                       # status page: admins only once login is set up
 
 
 def go(new_kw: str, new_people: str) -> None:
@@ -49,7 +58,7 @@ def go(new_kw: str, new_people: str) -> None:
     st.rerun()
 
 
-if style.nav(view, auth.current_email()):
+if style.nav(view, user, auth.configured()):
     if view == "search":
         go(query.EXAMPLE["kw"], query.EXAMPLE["people"])
     else:
@@ -59,9 +68,17 @@ if style.nav(view, auth.current_email()):
 
 if view == "roadmap":
     roadmap.render()
+elif view == "db":
+    dbstatus.render()
+elif view == "settings":
+    account.profile_form(oa.OpenAlex(api_key=api_key(), offline=offline), user)
 elif view == "me":
-    user = account.gate(oa.OpenAlex(api_key=api_key(), offline=offline))
-    report.render(user)
+    me = onboarding.gate(oa.OpenAlex(api_key=api_key(), offline=offline))  # login screen + first-login form
+    if flag("PR_DB") == "fake":           # file DB for development: there is no report data to show
+        st.info("Signed in with the file DB (PR_DB=fake). Weekly reports need the real database.",
+                icon=":material/info:")
+    else:
+        report.render(db.get_user(me["id"]))  # always the fresh users row (name, lab, email setting)
 elif view == "search":
     submitted = search.render(*ss.get("prefill", ("", "")))
     if submitted:
