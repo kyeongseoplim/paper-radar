@@ -13,6 +13,8 @@ from core import openalex as oa
 from core.store import db
 from ui import style
 
+KW_MIN, KW_MAX = db.KW_MIN, db.KW_MAX  # DB 규칙: 키워드 2~3개
+
 SKIP = "skip"
 
 
@@ -30,6 +32,9 @@ def gate(client: oa.OpenAlex) -> dict:
         user = db.get_user(email)
     except NotImplementedError:
         _message("Almost there.", "You are signed in, but the database is not connected yet.")
+        _stop()
+    except Exception:  # Neon이 잠에서 깨는 중이거나 네트워크 문제
+        _message("We could not reach the database.", "Please refresh the page in a minute.")
         _stop()
     if user is None:
         _onboarding(client, email)
@@ -87,22 +92,24 @@ def _step_profile() -> None:
                             placeholder="e.g. Mobile Communications Lab")
         kw = st.text_input("Keywords", value=", ".join(prev.get("keywords", [])),
                            placeholder="e.g. MAC scheduler, O-RAN",
-                           help=f"Up to {query.MAX_KEYWORDS}, separated by commas.")
+                           help=f"{KW_MIN} to {KW_MAX} keywords, separated by commas.")
         person = st.text_input("A researcher to follow (optional)", value=prev.get("person", ""),
                                placeholder="e.g. Tommaso Melodia")
         submitted = st.form_submit_button("Next", type="primary", icon=":material/arrow_forward:",
                                           icon_position="right")
     if not submitted:
         return
-    keywords = query.parse_list(kw, query.MAX_KEYWORDS)
+    keywords = query.parse_list(kw, 99)
     people = query.parse_list(person, 1)
     problems = []
     if not name.strip():
         problems.append("Enter your name.")
     if not lab.strip():
         problems.append("Enter your lab name.")
-    if not keywords:
-        problems.append("Add at least one keyword.")
+    if len(keywords) < KW_MIN:
+        problems.append(f"Add at least {KW_MIN} keywords, separated by commas.")
+    elif len(keywords) > KW_MAX:
+        problems.append(f"Use at most {KW_MAX} keywords.")
     if problems:
         for p in problems:
             st.error(p, icon=":material/info:")
@@ -127,7 +134,11 @@ def _step_person(client: oa.OpenAlex, email: str, draft: dict) -> None:
             st.rerun()
     with save:
         if st.button("Save and continue", type="primary", key="onb_save", width="stretch"):
-            db.save_profile(email, draft["name"], draft["lab"], draft["keywords"], author)
+            try:
+                db.save_profile(email, draft["name"], draft["lab"], draft["keywords"], author, sub=auth.current_sub())
+            except Exception as e:  # DB 규칙 위반이나 연결 문제: 폼은 그대로 두고 알린다
+                st.error(f"Could not save your profile: {e}", icon=":material/error:")
+                return
             st.session_state.pop("onb_draft", None)
             st.session_state.pop("onb_prev", None)
             st.rerun()

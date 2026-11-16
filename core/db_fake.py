@@ -1,4 +1,4 @@
-"""core/db.py 와 같은 계약을 파일 하나(cache/fake_db.json)로 구현한 것. 개발·테스트 전용.
+"""core/db_app.py 와 같은 계약을 파일 하나(cache/fake_db.json)로 구현한 것. 개발·테스트 전용.
 
 cache/ 는 git에 올라가지 않는다. 처음부터 다시 하려면 cache/fake_db.json 을 지우면 된다.
 """
@@ -32,7 +32,13 @@ def get_user(email: str) -> dict | None:
     return next((u for u in _load()["users"] if u["email"] == email), None)
 
 
-def save_profile(email: str, name: str, lab: str, keywords: list[str], author: dict | None) -> dict:
+KW_MIN, KW_MAX = 2, 3  # 실제 DB(core/db.py)와 같은 키워드 개수 규칙
+
+
+def save_profile(email: str, name: str, lab: str, keywords: list[str], author: dict | None,
+                 sub: str | None = None) -> dict:
+    if not KW_MIN <= len(keywords) <= KW_MAX:
+        raise ValueError(f"Please enter {KW_MIN}-{KW_MAX} different keywords.")
     d = _load()
     email = email.strip().lower()
     user = next((u for u in d["users"] if u["email"] == email), None)

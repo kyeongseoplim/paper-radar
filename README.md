@@ -85,6 +85,22 @@ A free key (about $1 of requests per day — plenty for this app) is available a
    ```
 3. Never commit `secrets.toml` — it is already listed in `.gitignore`.
 
+## Database (Neon Postgres)
+
+User accounts, keywords, followed authors, weekly reports and the run log live in a free [Neon](https://neon.tech) Postgres database.
+
+1. Create a Neon project (region near your users, e.g. AWS Asia Pacific Tokyo). Optionally create a `dev` branch for testing.
+2. In **Connect**, copy the **pooled** connection string (host contains `-pooler`) into `.streamlit/secrets.toml` as `DATABASE_URL` (see `secrets.toml.example`). Scripts and the weekly job can use a `DATABASE_URL` environment variable instead.
+3. Create the tables (safe to re-run after `db/schema.sql` changes):
+   ```bash
+   .venv/Scripts/python scripts/init_db.py
+   ```
+   To use Neon's direct (non-pooled) string for schema changes, set `DATABASE_URL_DIRECT`.
+4. Check everything works (creates two throwaway users, checks they can't see each other's data, then deletes them):
+   ```bash
+   .venv/Scripts/python scripts/smoke_db.py
+   ```
+
 ## Deploy on Streamlit Community Cloud
 
 1. Push this repository to GitHub (include the `seed_cache/` folder).
@@ -122,6 +138,11 @@ ui/style.py         Look and feel: CSS, top bar, hero, cards, word clouds
 ui/search.py        Search page (two inputs, Enter to submit)
 ui/results.py       Results page: 01 New papers · 02 Key people · 03 Trends · 04 Summaries
 ui/roadmap.py       About & roadmap page
+core/db.py          Database helpers (users, keywords, author, reports, seen papers, run log, shared cache)
+db/schema.sql       Table definitions for Neon Postgres
+scripts/init_db.py  Create/update the tables · scripts/smoke_db.py  End-to-end database check
+ui/dbstatus.py      Database status page (?page=db)
+core/db_app.py      Connects the login page and weekly job to core/db.py (same contract as core/db_fake.py)
 prefetch.py         Saves search results to seed_cache/ before a demo or deployment
 seed_cache/         Saved results committed with the code
 .streamlit/         Theme (config.toml) and secrets template

@@ -69,6 +69,13 @@ def take_fresh_login() -> bool:
     return True
 
 
+def current_sub() -> str | None:
+    """로그인한 사람의 Auth0 사용자 id(sub). 개발용 로그인이나 로그인 전이면 None."""
+    if not configured() or not st.user.is_logged_in:
+        return None
+    return st.user.get("sub")
+
+
 def login() -> None:
     st.login()
 

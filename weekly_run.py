@@ -128,8 +128,8 @@ def main() -> int:
 
     try:
         users = db.list_active_users()
-    except NotImplementedError:
-        print("core/db.py is not implemented yet. Set PR_DB=fake to use the file DB (cache/fake_db.json).")
+    except NotImplementedError as e:  # DATABASE_URL 없음 (core/db_app.NotConnected)
+        print(f"Database is not connected: {e} Set PR_DB=fake to use the file DB (cache/fake_db.json).")
         return 1
     if args.user:
         users = [u for u in users if u["email"] == args.user.strip().lower()]

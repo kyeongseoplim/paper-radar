@@ -1,7 +1,7 @@
 """DB 선택 스위치. 다른 파일은 `from core.store import db` 로만 DB를 쓴다.
 
 PR_DB=fake → core/db_fake.py (cache/fake_db.json 파일. 계정·DB 없이 개발할 때)
-그 외      → core/db.py (실제 DB)
+그 외      → core/db_app.py (실제 DB: core/db.py 의 Neon Postgres 함수를 같은 계약으로 이어 줌)
 값은 환경변수에서 먼저 찾고, 없으면 .streamlit/secrets.toml 에서 찾는다.
 """
 from __future__ import annotations
@@ -23,6 +23,6 @@ def flag(name: str) -> str:
 if flag("PR_DB") == "fake":
     from core import db_fake as db
 else:
-    from core import db
+    from core import db_app as db
 
 __all__ = ["db", "flag"]

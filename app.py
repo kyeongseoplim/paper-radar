@@ -11,7 +11,7 @@ import streamlit as st
 
 from core import openalex as oa
 from core import auth, query
-from ui import account, report, results, roadmap, search, style
+from ui import account, dbstatus, report, results, roadmap, search, style
 
 st.set_page_config(page_title="Paper Radar · new papers and trends for your lab", page_icon="📡",
                    layout="wide", initial_sidebar_state="collapsed")
@@ -32,8 +32,8 @@ qp = st.query_params
 kw, people = qp.get("kw", ""), qp.get("people", "")
 offline = qp.get("offline") == "1"
 view = "results" if (kw.strip() or people.strip()) else "search"
-if qp.get("page") == "roadmap":
-    view = "roadmap"
+if qp.get("page") in ("roadmap", "db"):
+    view = qp.get("page")
 elif qp.get("page") == "me":
     view = "me"
 if view == "search" and auth.take_fresh_login():  # 로그인 직후엔 첫 화면으로 오므로 My radar로 보낸다
@@ -62,6 +62,8 @@ if view == "roadmap":
 elif view == "me":
     user = account.gate(oa.OpenAlex(api_key=api_key(), offline=offline))
     report.render(user)
+elif view == "db":
+    dbstatus.render()
 elif view == "search":
     submitted = search.render(*ss.get("prefill", ("", "")))
     if submitted:

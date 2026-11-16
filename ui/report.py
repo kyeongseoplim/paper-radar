@@ -1,6 +1,6 @@
 """My radar 화면(주간 리포트). 지금은 자리만 잡아 둔 상태이고, 리포트 화면 담당이 채운다.
 
-render(user) 는 로그인과 첫 로그인 폼을 통과한 user(core/db.py 의 user 형태)를 받는다.
+render(user) 는 로그인과 첫 로그인 폼을 통과한 user(core/db_app.py 의 user 형태)를 받는다.
 """
 from __future__ import annotations
 
