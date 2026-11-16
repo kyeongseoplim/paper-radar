@@ -168,17 +168,26 @@ def example_href() -> str:
     return "?" + urlencode(query.EXAMPLE)
 
 
-def nav(view: str) -> bool:
-    """상단 바. 오른쪽 버튼이 눌리면 True."""
+def nav(view: str, user: dict | None = None, can_login: bool = False) -> bool:
+    """상단 바. 오른쪽 버튼이 눌리면 True. 로그인 설정이 있으면 Sign in / Sign out 버튼도 표시."""
     with st.container(key="nav", horizontal=True, vertical_alignment="center", horizontal_alignment="distribute"):
         st.html('<div class="pr-logo"><a href="./" target="_self">PAPER<span>RADAR</span></a></div>', width="content")
-        st.html(f'<div class="pr-links"><a href="#how-it-works" target="_self">How it works</a>'
+        mine = ('<a href="?page=me" target="_self">Report</a><a href="?page=settings" target="_self">Settings</a>'
+                if user else "")
+        st.html(f'<div class="pr-links">{mine}<a href="#how-it-works" target="_self">How it works</a>'
                 f'<a href="{example_href()}" target="_self">Sample radar</a>'
                 f'<a href="?page=roadmap" target="_self">Roadmap</a></div>', width="content")
-        if view == "search":
-            return st.button("Try an example", icon=":material/arrow_forward:", icon_position="right",
-                             type="primary", key="nav_example")
-        return st.button("New search", icon=":material/arrow_back:", key="nav_new")
+        with st.container(horizontal=True, width="content", vertical_alignment="center"):
+            if user:
+                if st.button("Sign out", type="tertiary", key="nav_logout"):
+                    st.logout()
+            elif can_login:
+                if st.button("Sign in", icon=":material/login:", key="nav_login"):
+                    st.login()
+            if view == "search":
+                return st.button("Try an example", icon=":material/arrow_forward:", icon_position="right",
+                                 type="primary", key="nav_example")
+            return st.button("New search", icon=":material/arrow_back:", key="nav_new")
 
 
 def hero() -> None:
