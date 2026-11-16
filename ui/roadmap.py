@@ -55,10 +55,9 @@ MILESTONES = [
         "Rank by freshness, source and citations, then show newest first",
         "Covers papers whose abstracts are missing in OpenAlex",
     ]),
-    ("next", "In testing", "Weekly reports for members", "Stay updated without opening the app.", [
-        "Sign in with an email code; save 2–3 keywords and the person you follow",
-        "Every Monday: new papers, the person's new papers, this week vs. the 4-week average, an AI summary",
-        "Saved on your Report page (with past weeks) and sent by email",
+    ("soon", "Planned", "04 · AI summaries & weekly digest", "Stay updated without opening the app.", [
+        "Pick papers → AI writes a 3-line summary → you approve it",
+        "Approved summaries are sent weekly by Telegram or email",
     ]),
     ("soon", "Planned", "Better matching & trends", "Fixes for today's known limitations.", [
         "Smarter author matching than “most papers wins” for shared names",
