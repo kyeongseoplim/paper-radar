@@ -1,4 +1,4 @@
-"""Screen 2 — results: summary + KPIs, 01 new papers, 02 key people, 03 trends, 04 summaries (soon)."""
+"""Screen 2 — results: summary + KPIs, 01 new papers, 02 key people, 03 trends, 04 summaries (soon), survey link."""
 from __future__ import annotations
 
 import html
@@ -12,6 +12,7 @@ from ui import style
 
 PHRASE = {30: "the last 30 days", 90: "the last 3 months", 365: "the last 12 months"}
 TITLE = {30: "This month in your field", 90: "The last 3 months in your field", 365: "The past year in your field"}
+SURVEY_URL = "https://docs.google.com/forms/d/e/1FAIpQLSdGzhG6JRkWCYVnj3MOtpUZnQpH9N330myd1wUWRK_iC81jMw/viewform"
 
 
 def _people_kpi(persons) -> tuple[str, str]:
@@ -202,6 +203,18 @@ def _section_summaries() -> None:
             '</div></div>')
 
 
+def _feedback() -> None:
+    """결과 화면 맨 아래: 만족도 설문(구글 폼) 안내."""
+    st.html('<div class="pr-section"><div class="pr-soon" style="display:flex;flex-wrap:wrap;gap:14px 24px;'
+            'align-items:center;justify-content:space-between;background:var(--soft);border-style:solid;'
+            'border-color:#99F6E4"><div><b style="color:var(--ink);font-size:16px">Help us make Paper Radar better</b>'
+            '<p class="pr-sub" style="margin:4px 0 0">To help us improve the service, we would appreciate it if you '
+            'could fill out our short satisfaction survey (Google Form).</p></div>'
+            f'<a href="{SURVEY_URL}" target="_blank" rel="noopener" style="background:var(--teal);'
+            'color:#fff !important;text-decoration:none !important;border-radius:10px;padding:10px 18px;'
+            'font-weight:700;font-size:14px;white-space:nowrap">Take the survey ↗</a></div></div>')
+
+
 def render(client: oa.OpenAlex, radar: dict) -> None:
     stars = {oa.norm_name(p["chosen"]["name"]) for p in radar["persons"] if p.get("chosen")}
     _header(radar)
@@ -209,3 +222,4 @@ def render(client: oa.OpenAlex, radar: dict) -> None:
     _section_people(radar, stars)
     _section_trends(client, radar)
     _section_summaries()
+    _feedback()
