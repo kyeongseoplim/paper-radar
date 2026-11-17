@@ -4,7 +4,11 @@ n8n weekly workflow (data format: blueprint.md, "Notation")."""
 from __future__ import annotations
 
 import html
+import json
+import urllib.request
+from datetime import datetime, timedelta
 from urllib.parse import urlencode
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 import streamlit as st
@@ -100,6 +104,32 @@ def _trends(d: dict, author: dict | None) -> None:
             f'See yearly trends since 2020 on the live search →</a></p>')
 
 
+def _next_monday() -> str:
+    now = datetime.now(ZoneInfo("Asia/Seoul"))
+    days = 0 if (now.weekday() == 0 and now.hour < 7) else (7 - now.weekday()) % 7 or 7
+    return f"{now + timedelta(days=days):%a %d %b}, 07:00 KST"
+
+
+def _run_now(uid: int) -> None:
+    """Button that starts the n8n weekly workflow for this user only (webhook "On demand")."""
+    st.caption(f"Next weekly report: {_next_monday()}")
+    if "N8N_WEBHOOK_URL" not in st.secrets:
+        return
+    key = f"ran_{uid}"
+    if st.button("Build my report now", icon=":material/bolt:", disabled=st.session_state.get(key, False)):
+        try:
+            req = urllib.request.Request(
+                st.secrets["N8N_WEBHOOK_URL"], method="POST",
+                data=json.dumps({"user_id": uid}).encode(),
+                headers={"Content-Type": "application/json",
+                         "X-Paper-Radar-Token": st.secrets["N8N_WEBHOOK_TOKEN"]})
+            urllib.request.urlopen(req, timeout=15)
+            st.session_state[key] = True
+            st.success("Started. Your report will appear here in about a minute. Refresh the page.")
+        except Exception as e:
+            st.error(f"Could not start the report: {e}")
+
+
 def render(user: dict) -> None:
     uid = user["id"]
     with db.connect() as conn:
@@ -107,6 +137,7 @@ def render(user: dict) -> None:
         author = db.get_author(uid, conn=conn)
         weeks = db.list_reports(uid, conn=conn)
     _header(user, kws, author)
+    _run_now(uid)
     if not weeks:
         st.info("Your first weekly report will appear here after the next weekly run (Mondays, 07:00 KST).",
                 icon=":material/schedule:")

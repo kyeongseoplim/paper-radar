@@ -42,7 +42,7 @@ CREATE TABLE IF NOT EXISTS runs (
     finished_at   timestamptz,
     status        text NOT NULL DEFAULT 'running'
                   CHECK (status IN ('running', 'success', 'partial', 'failed')),
-    trigger       text NOT NULL DEFAULT 'manual',     -- manual | schedule
+    trigger       text NOT NULL DEFAULT 'manual',     -- manual | schedule | webhook
     users_ok      integer NOT NULL DEFAULT 0,
     users_failed  integer NOT NULL DEFAULT 0,
     error         text

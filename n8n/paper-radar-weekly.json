@@ -36,6 +36,30 @@
       "parameters": {}
     },
     {
+      "id": "c413a3b5-3999-51ba-8607-d95550cdc539",
+      "name": "On demand",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        400
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "paper-radar-run",
+        "authentication": "headerAuth",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "webhookId": "e77d44fe-a075-566f-9674-a162ad4f1f94",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "X-Paper-Radar-Token"
+        }
+      }
+    },
+    {
       "id": "061ee9ee-7f39-5d3f-a96d-0a0bb6a9604a",
       "name": "Config",
       "type": "n8n-nodes-base.set",
@@ -105,7 +129,7 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "=-- Open a run-log row. '{{ $('Run by hand').isExecuted ? 'manual' : 'schedule' }}' = 'schedule' | 'manual'.\nINSERT INTO runs (trigger) VALUES ('{{ $('Run by hand').isExecuted ? 'manual' : 'schedule' }}') RETURNING id;\n",
+        "query": "=-- Open a run-log row. '{{ $('On demand').isExecuted ? 'webhook' : $('Run by hand').isExecuted ? 'manual' : 'schedule' }}' = 'schedule' | 'manual' | 'webhook'.\nINSERT INTO runs (trigger) VALUES ('{{ $('On demand').isExecuted ? 'webhook' : $('Run by hand').isExecuted ? 'manual' : 'schedule' }}') RETURNING id;\n",
         "options": {}
       },
       "credentials": {
@@ -126,7 +150,7 @@
       ],
       "parameters": {
         "operation": "executeQuery",
-        "query": "-- Onboarded users with their keywords, followed author and the papers already shown to them in EARLIER weeks\n-- (this week's are left out, so re-running the same week rebuilds the same report).\nSELECT u.id, u.email, u.name, u.lab_name,\n       coalesce((SELECT array_agg(k.term ORDER BY k.position) FROM keywords k WHERE k.user_id = u.id), '{}') AS keywords,\n       (SELECT jsonb_build_object('openalex_id', a.openalex_id, 'display_name', a.display_name, 'institution', a.institution)\n          FROM followed_authors a WHERE a.user_id = u.id ORDER BY a.confirmed_at DESC LIMIT 1) AS author,\n       coalesce((SELECT array_agg(s.work_id) FROM seen_papers s\n                  WHERE s.user_id = u.id\n                    AND s.first_seen_week < date_trunc('week', now() AT TIME ZONE 'Asia/Seoul')::date), '{}') AS seen\nFROM users u\nWHERE u.onboarded_at IS NOT NULL\nORDER BY u.id;\n",
+        "query": "=-- Onboarded users (or only the clicking user, for an on-demand webhook run) with their keywords, followed author and the papers already shown to them in EARLIER weeks\n-- (this week's are left out, so re-running the same week rebuilds the same report).\nSELECT u.id, u.email, u.name, u.lab_name,\n       coalesce((SELECT array_agg(k.term ORDER BY k.position) FROM keywords k WHERE k.user_id = u.id), '{}') AS keywords,\n       (SELECT jsonb_build_object('openalex_id', a.openalex_id, 'display_name', a.display_name, 'institution', a.institution)\n          FROM followed_authors a WHERE a.user_id = u.id ORDER BY a.confirmed_at DESC LIMIT 1) AS author,\n       coalesce((SELECT array_agg(s.work_id) FROM seen_papers s\n                  WHERE s.user_id = u.id\n                    AND s.first_seen_week < date_trunc('week', now() AT TIME ZONE 'Asia/Seoul')::date), '{}') AS seen\nFROM users u\nWHERE u.onboarded_at IS NOT NULL\n  AND {{ $('On demand').isExecuted ? 'u.id = ' + Number($('On demand').first().json.body.user_id) : 'true' }}  -- webhook run (\"Build my report now\"): only the user who clicked\nORDER BY u.id;\n",
         "options": {}
       },
       "credentials": {
@@ -295,6 +319,17 @@
       ]
     },
     "Run by hand": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On demand": {
       "main": [
         [
           {
