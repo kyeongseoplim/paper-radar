@@ -30,7 +30,7 @@ def sql(name: str) -> str:
     text = (ROOT / "n8n" / "sql" / f"{name}.sql").read_text(encoding="utf-8")
     for k in ("trigger", "items", "run_id"):
         text = text.replace(f"@{k}@", f"%({k})s")
-    return text
+    return text.replace("@user_filter@", "true")  # all users
 
 
 def run_nodes(config: dict, users: list[dict]) -> list[dict]:

@@ -17,7 +17,9 @@ CFG = "$('Config').first().json"
 # SQL placeholder -> n8n expression. The report JSON goes in as a dollar-quoted literal because the Postgres
 # node's "Query Parameters" option splits values on commas.
 N8N_PARAMS = {
-    "trigger": "'{{ $('Run by hand').isExecuted ? 'manual' : 'schedule' }}'",
+    "trigger": "'{{ $('On demand').isExecuted ? 'webhook' : $('Run by hand').isExecuted ? 'manual' : 'schedule' }}'",
+    # Number() keeps anything but a number out of the SQL; schedule and manual runs load every user
+    "user_filter": "{{ $('On demand').isExecuted ? 'u.id = ' + Number($('On demand').first().json.body.user_id) : 'true' }}",
     "items": "$pr${{ JSON.stringify($input.all().map(i => i.json)) }}$pr$",
     "run_id": "{{ $('Start run').first().json.id }}",
     "ids": "ARRAY[{{ $('Load unsent').all().map(i => i.json.id).join(',') }}]",
@@ -75,6 +77,11 @@ def weekly() -> dict:
         node("Every Monday 07:00", "n8n-nodes-base.scheduleTrigger", 1.2, 0, 0,
              {"rule": {"interval": [{"field": "weeks", "triggerAtDay": [1], "triggerAtHour": 7}]}}),
         node("Run by hand", "n8n-nodes-base.manualTrigger", 1, 0, 200, {}),
+        node("On demand", "n8n-nodes-base.webhook", 2, 0, 400,   # "Build my report now" button on the Report page
+             {"httpMethod": "POST", "path": "paper-radar-run", "authentication": "headerAuth",
+              "responseMode": "onReceived", "options": {}},
+             webhookId=str(uuid.uuid5(uuid.NAMESPACE_URL, "paper-radar/webhook")),
+             credentials={"httpHeaderAuth": {"id": "", "name": "X-Paper-Radar-Token"}}),
         node("Config", "n8n-nodes-base.set", 3.4, 220, 100, {"assignments": {"assignments": [
             {"id": str(uuid.uuid5(uuid.NAMESPACE_URL, n)), "name": n, "type": t, "value": v} for n, t, v in CONFIG]},
             "options": {}}),
@@ -97,6 +104,7 @@ def weekly() -> dict:
     ]
     connections = {
         **chain("Every Monday 07:00", "Config"), **chain("Run by hand", "Config"),
+        **chain("On demand", "Config"),
         **chain("Config", "Start run", "Load users", "Build reports", "Summarize + render", "Save reports"),
         "Save reports": {"main": [[{"node": "Email admin summary", "type": "main", "index": 0},
                                    {"node": "Load unsent", "type": "main", "index": 0}]]},

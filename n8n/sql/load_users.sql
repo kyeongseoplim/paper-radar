@@ -1,4 +1,4 @@
--- Onboarded users with their keywords, followed author and the papers already shown to them in EARLIER weeks
+-- Onboarded users (or only the clicking user, for an on-demand webhook run) with their keywords, followed author and the papers already shown to them in EARLIER weeks
 -- (this week's are left out, so re-running the same week rebuilds the same report).
 SELECT u.id, u.email, u.name, u.lab_name,
        coalesce((SELECT array_agg(k.term ORDER BY k.position) FROM keywords k WHERE k.user_id = u.id), '{}') AS keywords,
@@ -9,4 +9,5 @@ SELECT u.id, u.email, u.name, u.lab_name,
                     AND s.first_seen_week < date_trunc('week', now() AT TIME ZONE 'Asia/Seoul')::date), '{}') AS seen
 FROM users u
 WHERE u.onboarded_at IS NOT NULL
+  AND @user_filter@  -- webhook run ("Build my report now"): only the user who clicked
 ORDER BY u.id;
