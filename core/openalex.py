@@ -232,16 +232,38 @@ def subfield_mix(client: OpenAlex, groups, days: int = 365, top: int = 6):
     return {"total": total, "days": days, "fields": fields[:top]}, meta
 
 
+def _author_profile(a: dict) -> dict:
+    """동명이인 구별용: 주 연구 주제 2개, 그 분야, 활동 연도, ORCID 여부. 예전 저장본에는 없을 수 있다."""
+    topics = a.get("topics") or []
+    years = sorted(c["year"] for c in (a.get("counts_by_year") or []) if c.get("works_count"))
+    return {"topics": [clean(t.get("display_name")) for t in topics[:2] if t.get("display_name")],
+            "field": clean(((topics[0].get("subfield") or {}).get("display_name")) if topics else ""),
+            "years": (years[0], years[-1]) if years else None, "orcid": bool(a.get("orcid"))}
+
+
+def author_caption(c: dict) -> str:
+    """후보 한 줄 설명: '501 papers · Software-Defined Networks and 5G (Computer Networks…) · active 2003–2026 · ORCID'."""
+    bits = [f'{c.get("works", 0):,} papers']
+    if c.get("topics"):
+        bits.append(c["topics"][0] + (f' ({c["field"]})' if c.get("field") else ""))
+    if c.get("years"):
+        y0, y1 = c["years"]
+        bits.append(f"active {y0}–{y1}" if y0 != y1 else f"active {y1}")
+    if c.get("orcid"):
+        bits.append("ORCID")
+    return " · ".join(bits)
+
+
 def find_authors(client: OpenAlex, name: str, n: int = 6):
     params = {"search": name, "per-page": n,
-              "select": "id,display_name,works_count,cited_by_count,last_known_institutions"}
+              "select": "id,display_name,works_count,cited_by_count,last_known_institutions,topics,counts_by_year,orcid"}
     data, meta = client.get("authors", params, f"authors|{name.strip().lower()}|{n}")
     cands = []
     for a in data["results"]:
         inst = ", ".join(i.get("display_name", "") for i in (a.get("last_known_institutions") or []))
         cands.append({"id": a["id"].rsplit("/", 1)[-1], "name": clean(a["display_name"]),
                       "inst": inst or "Affiliation unknown", "works": a.get("works_count") or 0,
-                      "cited": a.get("cited_by_count") or 0})
+                      "cited": a.get("cited_by_count") or 0, **_author_profile(a)})
     return cands, meta
 
 

@@ -216,16 +216,20 @@ def _section_people(radar, stars) -> None:
             st.warning(f'No author found for “{p["query"]}”. Check the spelling.', icon=":material/person_off:")
             continue
         initials = "".join(w[0] for w in c["name"].split()[:2]).upper()
+        topic = (f'<p>Main topic: {html.escape(c["topics"][0])}'
+                 + (f' ({html.escape(c["field"])})' if c.get("field") else "") + "</p>") if c.get("topics") else ""
         st.html(f'<div class="pr-person"><div class="pr-avatar">{html.escape(initials)}</div><div>'
-                f'<h3>{html.escape(c["name"])}</h3><p>{html.escape(c["inst"])}</p>'
+                f'<h3>{html.escape(c["name"])}</h3><p>{html.escape(c["inst"])}</p>{topic}'
                 f'<p>{c["works"]:,} papers · {c["cited"]:,} citations · '
                 f'<b style="color:#0F766E">{p["total"]} new</b> in {PHRASE[p["days"]]}</p></div></div>')
         if len(p["candidates"]) > 1:
-            ids = [x["id"] for x in p["candidates"]]
-            labels = {x["id"]: f'{x["name"]} · {x["inst"]} · {x["works"]:,} papers' for x in p["candidates"]}
+            cands = p["candidates"]
+            ids = [x["id"] for x in cands]
+            labels = {x["id"]: f'**{x["name"]}** · {x["inst"]}' for x in cands}
             with st.popover("Not the right person?", icon=":material/swap_horiz:"):
-                st.radio("We picked the author with the most papers. Choose another match:", ids,
-                         index=ids.index(c["id"]), format_func=labels.get, key=f'pick_{p["query"]}',
+                st.radio("We picked the author with the most papers. Check the main topic and active years, "
+                         "and choose another match:", ids, index=ids.index(c["id"]), format_func=labels.get,
+                         captions=[oa.author_caption(x) for x in cands], key=f'pick_{p["query"]}',
                          on_change=_pick, args=(p["query"],))
         if p["rows"]:
             style.paper_cards(p["rows"], stars)
