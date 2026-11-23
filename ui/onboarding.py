@@ -205,12 +205,15 @@ def _pick_author(client: oa.OpenAlex, name: str) -> dict | None:
         if option == SKIP:
             return "None of these (skip for now)"
         c = by_id[option]
-        return f'{c["name"]} · {c["inst"]} · {c["works"]:,} papers'
+        return f'**{c["name"]}** · {c["inst"]}'
 
+    # 동명이인 구별(설문: 같은 이름 중 원하는 연구자 찾기가 헷갈림): 주 연구 주제·활동 연도를 한 줄로
+    captions = [oa.author_caption(by_id[o]) if o != SKIP else "" for o in options]
     st.html(f'<div class="pr-h2">Which {html.escape(name)} do you mean?</div>'
-            '<p class="pr-sub">Several authors can share a name. Pick the one you want to follow.</p>')
+            '<p class="pr-sub">Several authors can share a name. Check the main topic and the active years, '
+            'then pick the one you want to follow.</p>')
     pick = st.radio("Author", options, index=options.index(match["chosen"]["id"]), format_func=label,
-                    key="onb_pick", label_visibility="collapsed")
+                    captions=captions, key="onb_pick", label_visibility="collapsed")
     if pick == SKIP:
         return None
     c = by_id[pick]
