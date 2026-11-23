@@ -33,6 +33,7 @@ ss = st.session_state
 ss.setdefault("choices", {})
 qp = st.query_params
 kw, people = qp.get("kw", ""), qp.get("people", "")
+fields, exclude = qp.get("fields", ""), qp.get("exclude", "")  # 결과 좁히기(선택): 세부 분야 id, 제외 단어
 offline = qp.get("offline") == "1"
 view = "results" if (kw.strip() or people.strip()) else "search"
 if qp.get("page") in ("roadmap", "db", "me", "settings"):
@@ -86,7 +87,7 @@ elif view == "search":
 else:
     client = oa.OpenAlex(api_key=api_key(), offline=offline)
     with st.spinner("Scanning OpenAlex for new papers, people and trends…"):
-        radar = query.run(client, kw, people, ss.choices)
+        radar = query.run(client, kw, people, ss.choices, fields, exclude)
     results.render(client, radar)
 
 style.footer()

@@ -11,6 +11,7 @@ import hashlib
 import json
 import re
 import time
+from dataclasses import dataclass
 from pathlib import Path
 
 import requests
@@ -128,6 +129,38 @@ def gkey(groups) -> str:
     return " & ".join("|".join(t.lower() for t in g) for g in groups)
 
 
+@dataclass(frozen=True)
+class Scope:
+    """키워드 검색을 좁히는 선택 조건. 둘 다 비어 있으면 필터·캐시 키가 예전과 똑같다.
+
+    subfields: OpenAlex 세부 분야 id(예: "1705" = Computer Networks and Communications).
+               논문에 붙은 분야(최대 3개) 중 하나라도 맞으면 통과(topics.subfield.id, 그 안은 OR).
+    exclude:   제목·초록에 이 단어가 하나라도 있으면 제외. OpenAlex 부정 검색은 한 단어만 확실히 동작한다.
+    """
+    subfields: tuple[str, ...] = ()
+    exclude: tuple[str, ...] = ()
+
+    def __bool__(self) -> bool:
+        return bool(self.subfields or self.exclude)
+
+    def filters(self) -> list[str]:
+        out = []
+        if self.subfields:
+            out.append("topics.subfield.id:" + "|".join(self.subfields))
+        if self.exclude:
+            out.append("title_and_abstract.search:!" + "|".join(self.exclude))
+        return out
+
+    def key(self) -> str:
+        """캐시 키 꼬리. 조건이 없으면 빈 문자열이라 기존 저장본(seed_cache)을 그대로 쓴다."""
+        if not self:
+            return ""
+        return f"|f:{','.join(sorted(self.subfields))}|x:{','.join(sorted(t.lower() for t in self.exclude))}"
+
+
+NO_SCOPE = Scope()
+
+
 # ---------- 결과 정리 ----------
 
 def clean(s: str | None) -> str:
@@ -173,13 +206,30 @@ def tidy(rows: list[dict], exclude_zenodo: bool = True) -> list[dict]:
 
 # ---------- 조회 함수 ----------
 
-def recent_works(client: OpenAlex, groups, days: int, n: int):
-    filt = kw_filters(groups) + window(days) + [f"type:{WORK_TYPES}"]
+def recent_works(client: OpenAlex, groups, days: int, n: int, scope: Scope = NO_SCOPE):
+    filt = kw_filters(groups) + scope.filters() + window(days) + [f"type:{WORK_TYPES}"]
     params = {"filter": ",".join(filt), "sort": "publication_date:desc",
               "per-page": min(50, n * 2 + 5), "select": SELECT}
-    data, meta = client.get("works", params, f"recent|{gkey(groups)}|{days}|{n}")
+    data, meta = client.get("works", params, f"recent|{gkey(groups)}|{days}|{n}{scope.key()}")
     rows = tidy([parse_work(w) for w in data["results"]])[:n]
     return rows, data["meta"]["count"], meta
+
+
+def subfield_mix(client: OpenAlex, groups, days: int = 365, top: int = 6):
+    """키워드에 맞는 최근 논문이 주로 어느 세부 분야인지. share = 대표 분야(primary topic)가 그것인 논문 비율.
+
+    대표 분야는 논문당 하나라 share 합이 1을 넘지 않는다. 걸러낼 때는 붙은 분야 전부를 보므로(Scope)
+    실제로 남는 논문은 이 비율보다 조금 많다.
+    """
+    filt = kw_filters(groups) + window(days) + [f"type:{WORK_TYPES}"]
+    params = {"filter": ",".join(filt), "group_by": "primary_topic.subfield.id"}
+    data, meta = client.get("works", params, f"mix|{gkey(groups)}|{days}")
+    total = data["meta"]["count"]
+    fields = [{"id": str(g["key"]).rsplit("/", 1)[-1], "name": clean(g["key_display_name"]), "count": g["count"],
+               "share": g["count"] / total if total else 0.0}
+              for g in data["group_by"] if g.get("key") and str(g["key"]).rsplit("/", 1)[-1].isdigit()]
+    fields.sort(key=lambda f: f["count"], reverse=True)
+    return {"total": total, "days": days, "fields": fields[:top]}, meta
 
 
 def find_authors(client: OpenAlex, name: str, n: int = 6):
@@ -205,15 +255,15 @@ def author_works(client: OpenAlex, author_ids, days: int, n: int):
     return rows, data["meta"]["count"], meta
 
 
-def _trend_base(groups=None, author_ids=None) -> tuple[list[str], str]:
+def _trend_base(groups=None, author_ids=None, scope: Scope = NO_SCOPE) -> tuple[list[str], str]:
     if author_ids:
         ids = sorted(author_ids)
         return ["author.id:" + "|".join(ids)], "a:" + ",".join(ids)
-    return kw_filters(groups) + [f"type:{WORK_TYPES}"], "k:" + gkey(groups)
+    return kw_filters(groups) + scope.filters() + [f"type:{WORK_TYPES}"], "k:" + gkey(groups) + scope.key()
 
 
-def year_counts(client: OpenAlex, y0: int, y1: int, groups=None, author_ids=None):
-    base, key = _trend_base(groups, author_ids)
+def year_counts(client: OpenAlex, y0: int, y1: int, groups=None, author_ids=None, scope: Scope = NO_SCOPE):
+    base, key = _trend_base(groups, author_ids, scope)
     params = {"filter": ",".join(base + [f"publication_year:{y0}-{y1}"]), "group_by": "publication_year"}
     data, meta = client.get("works", params, f"years|{key}|{y0}-{y1}")
     counts = {y: 0 for y in range(y0, y1 + 1)}
@@ -223,8 +273,8 @@ def year_counts(client: OpenAlex, y0: int, y1: int, groups=None, author_ids=None
     return counts, meta
 
 
-def year_keywords(client: OpenAlex, year: int, groups=None, author_ids=None):
-    base, key = _trend_base(groups, author_ids)
+def year_keywords(client: OpenAlex, year: int, groups=None, author_ids=None, scope: Scope = NO_SCOPE):
+    base, key = _trend_base(groups, author_ids, scope)
     params = {"filter": ",".join(base + [f"publication_year:{year}"]), "group_by": "keywords.id"}
     data, meta = client.get("works", params, f"kw|{key}|{year}")
     return {clean(g["key_display_name"]): g["count"] for g in data["group_by"]}, meta

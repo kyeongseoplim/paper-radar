@@ -1,4 +1,5 @@
-"""Screen 2 — results: summary + KPIs, 01 new papers, 02 key people, 03 trends, 04 summaries (soon), survey link."""
+"""Screen 2 — results: summary + KPIs, narrow panel, 01 new papers, 02 key people, 03 trends, 04 summaries (soon),
+survey link. The narrow panel writes ?fields=…&exclude=… into the URL, so a narrowed radar can be shared too."""
 from __future__ import annotations
 
 import html
@@ -59,6 +60,98 @@ def _header(radar) -> None:
     style.source_line(metas)
 
 
+# ---------- 좁히기: 세부 분야, 제외 단어, 더 구체적인 키워드 ----------
+
+def _field_names(radar) -> dict[str, str]:
+    return {f["id"]: f["name"] for f in ((radar.get("mix") or {}).get("fields") or [])}
+
+
+def _scope_text(radar) -> str:
+    """'Only in: … · Leaving out: …' (조건이 없으면 빈 문자열)."""
+    scope, names = radar["scope"], _field_names(radar)
+    bits = []
+    if scope.subfields:
+        bits.append("Only in: " + ", ".join(html.escape(names.get(i, f"field {i}")) for i in scope.subfields))
+    if scope.exclude:
+        bits.append("Leaving out: " + ", ".join(html.escape(t) for t in scope.exclude))
+    return " · ".join(bits)
+
+
+def _set_params(**values) -> None:
+    for k, v in values.items():
+        if v:
+            st.query_params[k] = v
+        elif k in st.query_params:
+            del st.query_params[k]
+
+
+def _forget_widgets() -> None:
+    for k in [k for k in st.session_state if str(k).startswith("refine_")]:
+        del st.session_state[k]
+
+
+def _apply(key_f: str, key_x: str) -> None:
+    ss = st.session_state
+    _set_params(fields=",".join(ss.get(key_f) or []), exclude=(ss.get(key_x) or "").strip())
+
+
+def _clear() -> None:
+    _set_params(fields="", exclude="")
+    _forget_widgets()
+
+
+def _use_term(old: str, new: str) -> None:
+    st.query_params["kw"] = query.swap_keyword(st.query_params.get("kw", ""), old, new)
+    _clear()
+
+
+def _section_refine(radar) -> None:
+    """키워드가 여러 분야에 걸치면 분야를 골라 엉뚱한 논문을 거르게 한다(설문: 키워드와 안 맞는 논문 3/11)."""
+    if not radar["groups"]:
+        return
+    mix, scope, narrower = radar.get("mix"), radar["scope"], radar.get("narrower") or {}
+    fields = (mix or {}).get("fields") or []
+    if not (fields or narrower or scope):
+        return
+    names = _field_names(radar)
+    if fields:
+        msg = (f"Main field of the past year's papers on these keywords: {html.escape(query.mix_text(mix))}. "
+               "Pick your field to drop off-topic papers, or leave out words.")
+    else:
+        msg = "You can make your keywords more specific."
+    tag = st.query_params.get("kw", "")  # 새 검색이면 위젯도 새로(URL 값으로) 그린다
+    key_f, key_x = f"refine_fields|{tag}", f"refine_exclude|{tag}"
+    with st.container(border=True, key="refine_box"):
+        st.html(style.eyebrow("NARROW YOUR RADAR") + f'<p class="pr-sub" style="margin:4px 0 0">{msg}</p>')
+        for old, news in narrower.items():
+            cols = st.columns([2] + [3] * len(news), vertical_alignment="center")
+            cols[0].html(f'<p class="pr-note" style="margin:0">More specific than “{html.escape(old)}”:</p>')
+            for col, new in zip(cols[1:], news):
+                col.button(f"Search “{new}”", key=f"refine_term|{old}|{new}", type="tertiary",
+                           icon=":material/manage_search:", on_click=_use_term, args=(old, new))
+        if fields or scope:
+            options = [f["id"] for f in fields] + [i for i in scope.subfields if i not in names]
+            shares = {f["id"]: f["share"] for f in fields}
+            with st.form("refine_form", border=False, enter_to_submit=True):
+                st.pills("Field", options, selection_mode="multi", default=list(scope.subfields), key=key_f,
+                         format_func=lambda i: (f"{names[i]} · {shares[i]:.0%}" if i in names else f"Field {i}"),
+                         help="% = share of the past year's papers whose main field is this. OpenAlex tags each "
+                              "paper with up to three fields and a paper stays if any tag matches, so a few more "
+                              "papers than this share stay.")
+                st.text_input("Leave out papers that mention", value=", ".join(scope.exclude), key=key_x,
+                              placeholder="e.g. road, vehicle", help="Single words, separated by commas.")
+                c1, c2, _ = st.columns([1, 1, 4])
+                c1.form_submit_button("Apply", type="primary", icon=":material/filter_alt:", width="stretch",
+                                      on_click=_apply, args=(key_f, key_x))
+                if scope:
+                    c2.form_submit_button("Clear", icon=":material/close:", width="stretch", on_click=_clear)
+        if radar.get("exclude_rejected"):
+            bad = ", ".join(f"“{html.escape(t)}”" for t in radar["exclude_rejected"])
+            st.html(f'<p class="pr-note" style="margin:4px 0 0">Skipped {bad}: use single words (e.g. road).</p>')
+        if "mix" in radar["errors"] and not fields:
+            st.html('<p class="pr-note" style="margin:4px 0 0">Field choices are not available right now.</p>')
+
+
 def _papers_table(rows) -> None:
     df = pd.DataFrame([{
         "Date": r["date"], "Title": r["title"],
@@ -83,6 +176,8 @@ def _section_papers(radar, stars) -> None:
         st.info("Add keywords on the search page to see new papers.", icon=":material/info:")
         return
     notes = [f'Searching titles and abstracts for: {html.escape(radar["query_text"])}']
+    if radar["scope"]:
+        notes.append(_scope_text(radar))
     if p["widened_from"]:
         n0 = p["first_total"]
         notes.insert(0, f'Only {n0} paper{"s" if n0 != 1 else ""} in the last {p["widened_from"]} days, '
@@ -156,6 +251,8 @@ def _section_trends(client, radar) -> None:
         data = radar["field"]
         terms = ", ".join(dict.fromkeys(t for g in radar["groups"] for t in g))
         basis = f"All papers mentioning any of: {html.escape(terms)}"
+        if radar["scope"]:
+            basis += " · " + _scope_text(radar)
     else:
         person = next(p for p in persons if p["chosen"]["name"] == src)
         try:
@@ -218,6 +315,7 @@ def _feedback() -> None:
 def render(client: oa.OpenAlex, radar: dict) -> None:
     stars = {oa.norm_name(p["chosen"]["name"]) for p in radar["persons"] if p.get("chosen")}
     _header(radar)
+    _section_refine(radar)
     _section_papers(radar, stars)
     _section_people(radar, stars)
     _section_trends(client, radar)
