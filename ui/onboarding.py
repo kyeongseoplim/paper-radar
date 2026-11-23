@@ -130,6 +130,7 @@ def _step_person(client: oa.OpenAlex, email: str, draft: dict) -> None:
     st.html('<div class="pr-note" style="margin-top:14px">'
             f'<b>{html.escape(draft["name"])}</b> · {html.escape(draft["lab"])} · '
             f'Keywords: {html.escape(", ".join(draft["keywords"]))}</div>')
+    _preview(client, draft)
     back, save, _ = st.columns([1, 2, 5])
     with back:
         if st.button("Back", key="onb_back", width="stretch"):
@@ -146,6 +147,45 @@ def _step_person(client: oa.OpenAlex, email: str, draft: dict) -> None:
             st.session_state.pop("onb_draft", None)
             st.session_state.pop("onb_prev", None)
             st.rerun()
+
+
+PREVIEW_PHRASE = {7: "the last 7 days", 30: "the last 30 days", 90: "the last 3 months"}
+
+
+def _use_term(old: str, new: str) -> None:
+    d = st.session_state.onb_draft
+    d["keywords"] = query.parse_list(query.swap_keyword(", ".join(d["keywords"]), old, new), 99)
+
+
+def _preview(client: oa.OpenAlex, draft: dict) -> None:
+    """저장 전 미리보기: 주간 리포트와 같은 규칙으로 찾은 최신 논문. 엉뚱하면 Back 으로 키워드를 고친다."""
+    with st.spinner("Checking the newest papers for your keywords…"):
+        pv = query.preview(client, draft["keywords"])
+    st.html('<div class="pr-h2" style="margin-top:18px">Preview of your weekly report</div>'
+            '<p class="pr-sub">The newest papers your keywords find right now. If they look off-topic, '
+            'go Back and make a keyword more specific.</p>')
+    p = pv["papers"]
+    if p is None:
+        st.info("The preview is not available right now. You can still save and change keywords later.",
+                icon=":material/info:")
+    elif not p["rows"]:
+        st.info(f"No papers matched all of these keywords in {PREVIEW_PHRASE[p['days']]}. "
+                "Try broader keywords, or save and check your first report.", icon=":material/search_off:")
+    else:
+        items = "".join(
+            f'<li style="margin:6px 0"><a href="{html.escape(r["link"])}" target="_blank" rel="noopener">'
+            f'{html.escape(r["title"])}</a><br><span class="pr-note">'
+            f'{html.escape(r["venue"] or "Venue unknown")} · {html.escape(r["date"])}</span></li>' for r in p["rows"])
+        n = p["total"]
+        st.html(f'<ul style="padding-left:18px;margin:6px 0">{items}</ul>'
+                f'<p class="pr-note">{n:,} matching paper{"s" if n != 1 else ""} in {PREVIEW_PHRASE[p["days"]]}.</p>')
+    if query.mix_text(pv["mix"]):
+        st.html(f'<p class="pr-note"><b>Main field</b> of the past year\'s papers on these keywords: '
+                f'{html.escape(query.mix_text(pv["mix"]))}. If that is not your field, make a keyword more specific.</p>')
+    for old, news in (pv["narrower"] or {}).items():
+        for new in news:
+            st.button(f"Use “{new}” instead of “{old}”", key=f"onb_term|{old}|{new}", type="tertiary",
+                      icon=":material/manage_search:", on_click=_use_term, args=(old, new))
 
 
 def _pick_author(client: oa.OpenAlex, name: str) -> dict | None:
